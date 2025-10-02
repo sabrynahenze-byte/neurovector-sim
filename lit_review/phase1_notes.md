@@ -14,9 +14,9 @@ This mirrors Bryan’s outline so we can drop in quick notes/links.
 - Which NN type is best? SNN seems aligned with Prof. Ahmed’s push.
 - PyTorch tools (Torch, snnTorch, IBM AIHWKit) worth exploring.
 
-All algorithms for neuromorphic computing are based on SNNs. However, the model setup can vary depending on the application requirements. SNNs can be divided into two classes, depending on whether simulation or training for accuracy is desired. Below are tables of the applicable algorithms/models:
+All algorithms for neuromorphic computing are based on SNNs. However, the model setup can vary depending on the application requirements. Below are tables of the applicable training algorithms and neuron models:
 
-### Training
+### Training Algorithms
 
 | Algorithm | Description | Tools |
 | --------- | ----------- | ----- |
@@ -26,15 +26,15 @@ All algorithms for neuromorphic computing are based on SNNs. However, the model 
 
 *In traditional ANNs [image](images/ann_diagram.png), there are two stages that utilize MAC operations: **forward propagation** (used in inference to predict data) and [**backpropagation**](https://en.wikipedia.org/wiki/Backpropagation) (used in training to reduce prediction). During forward propagation, input data moves forward through the network's layers from the beginning (input layer -> hidden layers -> output layer), where each neuron in a layer performs a weighted sum of all its inputs $\sum(x_i \cdot w_i)$. This sum is then passed through an activation function to produce the neuron's output. During backward propagation, input data (the error) moves backward from the end (output layer -> hidden layers -> input layer), where operations are performed on entire layers at once using the chain rule, which is efficiently implemented by vectorization with basic matrix and vector multiplication. Training SNNs is more complex because the discrete spikes are not differentiable, so different backpropagation algorithms need to be used. For computation, the computation savings primarily come from forward propagation, where the resource-intensive multiplication of MAC operations are replaced with fast pure addition of AC operations.
 
-**The spiking function represents the core, non-differentiable spiking behavior and is often the Heaviside step function $\begin{equation}
+**The spiking function represents the core, non-differentiable spiking behavior and is often the Heaviside step function $$\begin{equation*}
 H(t) =
 \begin{cases}
     1, & t \ge 0, \\
     0, & t < 0
 \end{cases}
-\end{equation}$
+\end{equation*}$$
 
-### Simulation of Nueromorphic Hardware
+### Neuron Models
 
 | Model | Biological Realism | Computational Cost | Use Case | Tools |
 | ----- | ------------------ | ------------------ | -------- | ----- |
