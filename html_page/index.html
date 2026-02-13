@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNIST Digit Classifier</title>
+    <style>
+        /* ALL YOUR EXISTING CSS STYLES HERE */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        h1 span {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .upload-section {
+            text-align: center;
+            padding: 40px;
+            border: 3px dashed #ccc;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            transition: border-color 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-section:hover {
+            border-color: #667eea;
+        }
+        
+        .upload-section.dragover {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        
+        .upload-text {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .upload-hint {
+            font-size: 14px;
+            color: #999;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .preview-section {
+            display: none;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .preview-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            margin-bottom: 15px;
+        }
+        
+        .predict-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 40px;
+            font-size: 18px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+        }
+        
+        .predict-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .predict-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .results-section {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .prediction-badge {
+            text-align: center;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .prediction-number {
+            font-size: 72px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+        }
+        
+        .confidence {
+            font-size: 18px;
+            color: #666;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .plot-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .plot-container img {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+        
+        .top3-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .top3-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .top3-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .top3-digit {
+            font-size: 24px;
+            font-weight: bold;
+            width: 50px;
+            color: #667eea;
+        }
+        
+        .top3-prob {
+            flex: 1;
+            margin: 0 15px;
+        }
+        
+        .prob-bar {
+            height: 20px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: width 0.5s;
+        }
+        
+        .top3-percent {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .error-message {
+            color: #dc3545;
+            text-align: center;
+            padding: 10px;
+            border-radius: 5px;
+            background: #f8d7da;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .all-probs {
+            margin-top: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .prob-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .prob-cell {
+            text-align: center;
+            padding: 5px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .prob-digit {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .prob-value {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span>MNIST</span> Digit Classifier</h1>
+        
+        <div class="upload-section" id="uploadSection">
+            <div class="upload-text">Drag & drop or click to upload</div>
+            <div class="upload-hint">Supports: JPG, PNG, GIF</div>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+        
+        <div class="preview-section" id="previewSection">
+            <img src="" alt="Preview" class="preview-image" id="previewImage">
+            <button class="predict-btn" id="predictBtn">Predict Digit</button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing your image...</p>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="results-section" id="resultsSection">
+            <div class="prediction-badge">
+                <div class="prediction-number" id="predictionNumber">?</div>
+                <div class="confidence" id="confidenceText"></div>
+            </div>
+            
+            <div class="results-grid">
+                <div class="plot-container">
+                    <img src="" alt="Prediction Visualization" id="resultPlot">
+                </div>
+                
+                <div class="top3-container">
+                    <div class="top3-title">Top 3 Predictions</div>
+                    <div id="top3List"></div>
+                </div>
+            </div>
+            
+            <div class="all-probs">
+                <div class="top3-title">All Class Probabilities</div>
+                <div class="prob-grid" id="probGrid"></div>
+            </div>
+        </div>
+        
+        <footer>
+            Powered by PyTorch & Flask | Trained on MNIST dataset
+        </footer>
+    </div>
+
+    <script>
+    console.log('JavaScript loaded successfully!');
+    
+    // Get DOM elements
+    const uploadSection = document.getElementById('uploadSection');
+    const fileInput = document.getElementById('fileInput');
+    const previewSection = document.getElementById('previewSection');
+    const previewImage = document.getElementById('previewImage');
+    const predictBtn = document.getElementById('predictBtn');
+    const loading = document.getElementById('loading');
+    const resultsSection = document.getElementById('resultsSection');
+    const errorMessage = document.getElementById('errorMessage');
+    const predictionNumber = document.getElementById('predictionNumber');
+    const confidenceText = document.getElementById('confidenceText');
+    const resultPlot = document.getElementById('resultPlot');
+    const top3List = document.getElementById('top3List');
+    const probGrid = document.getElementById('probGrid');
+
+    // Variable to track the current file
+    let currentFile = null;
+
+    // Check if all elements were found
+    console.log('DOM Elements found:', {
+        uploadSection: !!uploadSection,
+        fileInput: !!fileInput,
+        previewSection: !!previewSection,
+        previewImage: !!previewImage,
+        predictBtn: !!predictBtn,
+        loading: !!loading,
+        resultsSection: !!resultsSection,
+        errorMessage: !!errorMessage
+    });
+
+    // Handle drag & drop
+    uploadSection.addEventListener('click', () => {
+        console.log('Upload section clicked');
+        fileInput.click();
+    });
+    
+    uploadSection.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadSection.classList.add('dragover');
+    });
+    
+    uploadSection.addEventListener('dragleave', () => {
+        uploadSection.classList.remove('dragover');
+    });
+    
+    uploadSection.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadSection.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        console.log('File dropped:', file ? file.name : 'No file');
+        if (file && file.type.startsWith('image/')) {
+            currentFile = file;  // Store the file
+            handleFile(file);
+        } else {
+            console.error('Not an image file');
+            showError('Please upload an image file');
+        }
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        console.log('File selected:', file ? file.name : 'No file');
+        if (file) {
+            currentFile = file;  // Store the file
+            handleFile(file);
+        }
+    });
+    
+    function handleFile(file) {
+        console.log('Handling file:', file.name);
+        console.log('File details:', {
+            name: file.name,
+            type: file.type,
+            size: file.size + ' bytes'
+        });
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            console.log('File loaded into memory');
+            previewImage.src = e.target.result;
+            previewSection.style.display = 'block';
+            resultsSection.style.display = 'none';
+            errorMessage.style.display = 'none';
+            console.log('Preview displayed');
+            
+            // Verify file is still accessible
+            console.log('Current file after load:', currentFile ? currentFile.name : 'None');
+        };
+        reader.onerror = (e) => {
+            console.error('FileReader error:', e);
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    predictBtn.addEventListener('click', async () => {
+        console.log('Predict button clicked');
+        
+        // Use currentFile instead of fileInput.files[0]
+        console.log('Current file:', currentFile ? currentFile.name : 'No file');
+        
+        if (!currentFile) {
+            console.error('No file selected (currentFile is null)');
+            showError('Please select an image first');
+            return;
+        }
+        
+        // Show loading
+        console.log('Showing loading spinner');
+        loading.style.display = 'block';
+        predictBtn.disabled = true;
+        errorMessage.style.display = 'none';
+        
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        
+        // Log FormData contents (for debugging)
+        console.log('FormData entries:');
+        for (let pair of formData.entries()) {
+            console.log('   ', pair[0], ':', pair[1] instanceof File ? pair[1].name : pair[1]);
+        }
+        
+        try {
+            console.log('Sending request to /predict...');
+            console.log('Using URL:', window.location.origin + '/predict');
+            
+            const response = await fetch('/predict', {
+                method: 'POST',
+                body: formData
+            });
+            
+            console.log('Response received:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                throw new Error(`Server error: ${response.status} - ${errorText}`);
+            }
+            
+            const result = await response.json();
+            console.log('Response data:', result);
+            
+            if (result.success) {
+                console.log('Prediction successful!');
+                // Update results
+                predictionNumber.textContent = result.prediction;
+                confidenceText.textContent = `Confidence: ${result.confidence}`;
+                resultPlot.src = 'data:image/png;base64,' + result.plot;
+                
+                // Update top 3
+                top3List.innerHTML = '';
+                result.top3.forEach((item, index) => {
+                    const probValue = parseFloat(item.probability) / 100;
+                    const width = probValue * 100;
+                    
+                    const div = document.createElement('div');
+                    div.className = 'top3-item';
+                    div.innerHTML = `
+                        <span class="top3-digit">#${index + 1}: ${item.digit}</span>
+                        <div class="top3-prob">
+                            <div class="prob-bar" style="width: ${width}%"></div>
+                        </div>
+                        <span class="top3-percent">${item.probability}</span>
+                    `;
+                    top3List.appendChild(div);
+                });
+                
+                // Update probability grid
+                probGrid.innerHTML = '';
+                for (let i = 0; i < 10; i++) {
+                    const prob = result.probabilities[i];
+                    const div = document.createElement('div');
+                    div.className = 'prob-cell';
+                    div.innerHTML = `
+                        <div class="prob-digit">${i}</div>
+                        <div class="prob-value">${prob}</div>
+                    `;
+                    probGrid.appendChild(div);
+                }
+                
+                // Show results
+                resultsSection.style.display = 'block';
+            } else {
+                console.error('Prediction failed:', result.error);
+                showError(result.error || 'Prediction failed');
+            }
+        } catch (error) {
+            console.error('Network error:', error);
+            console.error('Error details:', error.message);
+            showError('Network error: ' + error.message);
+        } finally {
+            console.log('Hiding loading spinner');
+            loading.style.display = 'none';
+            predictBtn.disabled = false;
+        }
+    });
+    
+    function showError(message) {
+        console.error('Showing error:', message);
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+    }
+
+    // Add reset button or clear option
+    function resetUpload() {
+        currentFile = null;
+        fileInput.value = '';  // Clear file input
+        previewSection.style.display = 'none';
+        resultsSection.style.display = 'none';
+        errorMessage.style.display = 'none';
+        console.log('Upload reset');
+    }
+
+    // Optional: Add a way to reset (you could add a button for this)
+    window.onload = function() {
+        console.log('Window fully loaded');
+        console.log('Initial currentFile:', currentFile);
+    };
+</script>
+</body>
+</html>
