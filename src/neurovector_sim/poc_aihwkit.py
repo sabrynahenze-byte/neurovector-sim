@@ -38,7 +38,7 @@ def build_rpu_config():
 
 class AIHWKITSNN(nn.Module):
     """
-    Minimal spiking network using AIHWKIT AnalogLinear layers.
+    Spiking network using AIHWKIT AnalogLinear layers.
     Demonstrates:
       - Input flattening
       - Rate-based spike encoding
@@ -86,7 +86,6 @@ class AIHWKITSNN(nn.Module):
 
 # ============================================================
 # Quick-test entry function
-# ============================================================
 
 def demo_run():
     """
