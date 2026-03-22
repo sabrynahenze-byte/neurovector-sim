@@ -18,30 +18,32 @@ class CNNModel(nn.Module):
         x = torch.max_pool2d(x, 2)
         x = torch.flatten(x, 1)
         x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
-        return torch.log_softmax(x, dim=1)
+        return self.fc2(x)
 
-if __name__ == "__main__":
-    # Train for just 3-5 epochs (takes minutes)
+def train_save_cnn_model(num_epochs=3):
     model = CNNModel()
     optimizer = optim.Adam(model.parameters())
     train_loader = torch.utils.data.DataLoader(
         datasets.MNIST('./data', train=True, download=True,
-                    transform=transforms.Compose([
-                        transforms.ToTensor(),
-                        transforms.Normalize((0.1307,), (0.3081,))
-                    ])),
+                       transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ])),
         batch_size=64, shuffle=True)
 
     model.train()
-    for epoch in range(3):
+    print("Training PyTorch CNN...")
+    for epoch in range(num_epochs):
         for data, target in train_loader:
             optimizer.zero_grad()
-            loss = nn.functional.nll_loss(model(data), target)
+            loss = nn.functional.cross_entropy(model(data), target)
             loss.backward()
             optimizer.step()
-        print(f"Epoch {epoch} complete")
+        print(f"Epoch {epoch + 1}/{num_epochs} complete")
 
-    # Save it
-    torch.save(model.state_dict(), 'cnn_model.pt')
-    print("✅ Model trained and saved!")
+    torch.save(model.state_dict(), 'pytorch_conv_model.pt')
+    print("✅ Model saved as pytorch_conv_model.pt")
+
+
+if __name__ == "__main__":
+    train_save_cnn_model()

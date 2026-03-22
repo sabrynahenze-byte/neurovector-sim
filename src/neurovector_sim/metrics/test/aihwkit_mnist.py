@@ -7,6 +7,7 @@
 #
 ############################################################
 
+import os
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -190,41 +191,59 @@ class AIHWKITSNNConv(nn.Module):
 # ============================================================
 # Model train and save functions
 
-def train_save_aihwkit_cnn():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+def train_save_aihwkit_cnn(num_epochs=5):
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+
+    # ConstantStepDevice: trains with realistic analog device noise so the model
+    # learns to be robust to it — this is the intended AIHWKIT workflow.
     rpu_config = SingleRPUConfig(device=ConstantStepDevice())
 
     # Hyperparameters
     batch_size = 512
-    num_steps = 5
-    num_epochs = 1
+    # 25 steps gives rate-encoded spike trains enough density to carry useful
+    # information. At 10 steps the trains were too sparse for the model to learn from.
+    num_steps = 25
     learning_rate = 1e-3
 
-    # Load data
+    # No Normalize here — spikegen.rate() expects values in [0, 1]
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
     ])
     train_loader = DataLoader(
-        datasets.MNIST("./data", train=True, download=True, transform=transform), 
+        datasets.MNIST("./data", train=True, download=True, transform=transform),
         batch_size=batch_size, shuffle=True
     )
 
     model = AIHWKITSNNConv(num_steps=num_steps, rpu_config=rpu_config).to(device)
 
+    # Resume from the latest checkpoint if one exists. Scans backwards from the
+    # last epoch so we always pick up from the furthest point reached.
+    start_epoch = 0
+    for e in range(num_epochs - 1, -1, -1):
+        checkpoint = f'aihwkit_cnn_epoch_{e + 1}.pt'
+        if os.path.exists(checkpoint):
+            print(f"Resuming from {checkpoint}...")
+            model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=False))
+            start_epoch = e + 1
+            break
+
+    if start_epoch >= num_epochs:
+        print("All epochs already complete — skipping training.")
+        return
+
     criterion = nn.CrossEntropyLoss()
     optimizer = AnalogOptimizer(
-        optim.Adam, 
-        model.parameters(), 
+        optim.Adam,
+        model.parameters(),
         lr=1e-3
     )
 
     # Training Loop
     model.train()
-    print(f"Training AIHWKIT Conv SNN on {device}...")
+    print(f"Training AIHWKIT Conv SNN on {device} (epochs {start_epoch + 1}–{num_epochs})...")
 
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         total_loss = 0
         for i, (data, targets) in enumerate(train_loader):
             data, targets = data.to(device), targets.to(device)
@@ -255,39 +274,58 @@ def train_save_aihwkit_cnn():
         print(f"Epoch {epoch+1}, Avg Loss: {total_loss/len(train_loader):.4f}")
 
     # Save the Model
-    torch.save(model.state_dict(), 'aihwkit_spiking_cnn.pt')
-    print("Analog model saved as aihwkit_spiking_cnn.pt")
+    torch.save(model.state_dict(), 'aihwkit_conv_model.pt')
+    print("Analog model saved as aihwkit_conv_model.pt")
 
-def train_save_aihwkit_fc():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+def train_save_aihwkit_fc(num_epochs=5):
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+
+    # ConstantStepDevice: trains with realistic analog device noise so the model
+    # learns to be robust to it — this is the intended AIHWKIT workflow.
     rpu_config = SingleRPUConfig(device=ConstantStepDevice())
 
     # Hyperparameters
     batch_size = 512
-    num_steps = 5
-    num_epochs = 1
+    # 25 steps gives rate-encoded spike trains enough density to carry useful
+    # information. At 10 steps the trains were too sparse for the model to learn from.
+    num_steps = 25
     learning_rate = 1e-3
 
-    # Load data
+    # No Normalize here — spikegen.rate() expects values in [0, 1]
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
     ])
     train_loader = DataLoader(
-        datasets.MNIST("./data", train=True, download=True, transform=transform), 
+        datasets.MNIST("./data", train=True, download=True, transform=transform),
         batch_size=batch_size, shuffle=True
     )
 
     model = AIHWKITSNNFC(num_steps=num_steps, rpu_config=rpu_config).to(device)
+
+    # Resume from the latest checkpoint if one exists. Scans backwards from the
+    # last epoch so we always pick up from the furthest point reached.
+    start_epoch = 0
+    for e in range(num_epochs - 1, -1, -1):
+        checkpoint = f'aihwkit_fc_epoch_{e + 1}.pt'
+        if os.path.exists(checkpoint):
+            print(f"Resuming from {checkpoint}...")
+            model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=False))
+            start_epoch = e + 1
+            break
+
+    if start_epoch >= num_epochs:
+        print("All epochs already complete — skipping training.")
+        return
+
     criterion = nn.CrossEntropyLoss()
-    optimizer = AnalogOptimizer(torch.optim.Adam, model.parameters(), lr=1e-2) # High LR for speed
+    optimizer = AnalogOptimizer(torch.optim.Adam, model.parameters(), lr=1e-3)
 
     # Training Loop
     model.train()
-    print(f"Training AIHWKIT FC SNN on {device}...")
+    print(f"Training AIHWKIT FC SNN on {device} (epochs {start_epoch + 1}–{num_epochs})...")
 
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         total_loss = 0
         for i, (data, targets) in enumerate(train_loader):
             data, targets = data.to(device), targets.to(device)
@@ -318,8 +356,8 @@ def train_save_aihwkit_fc():
         print(f"Epoch {epoch+1}, Avg Loss: {total_loss/len(train_loader):.4f}")
 
     # Save the Model
-    torch.save(model.state_dict(), 'aihwkit_spiking_fc.pt')
-    print("Analog model saved as aihwkit_spiking_fc.pt")
+    torch.save(model.state_dict(), 'aihwkit_fc_model.pt')
+    print("Analog model saved as aihwkit_fc_model.pt")
 
 # ============================================================
 # Quick-test entry function
@@ -357,6 +395,6 @@ def demo_run():
 
 if __name__ == "__main__":
     # demo_run()
-    # train_save_aihwkit_cnn()
-    train_save_aihwkit_fc()
+    train_save_aihwkit_cnn()
+    # train_save_aihwkit_fc()
 

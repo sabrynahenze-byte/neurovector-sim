@@ -57,7 +57,7 @@ class SOPCounter:
         # layer_input[0] shape: [B, C] for ANN, [T, B, C] for SNN
         data = layer_input[0]
 
-        # threshold at 0.5 so analog activations don't inflate the spike count
+        # Threshold at 0.5 so analog activations don't inflate the spike count
         spikes = (data > 0.5).float()
         num_spikes = spikes.sum().item()
 
@@ -152,11 +152,11 @@ class AIHWKITAdapter:
     """
     An adapter for AIHWKIT-based models.
 
-    Supports:
-    - logits tensor: [B, C]
-    - tuple/list: (logits, *extras)
-    - dict: {"logits": ..., ...}
-    - snnTorch-like tuple: (spk[T,B,C], mem...) -> reduces to logits (optional)
+    Supports the following formats for evaluation:
+        - logits tensor: [B, C]
+        - tuple/list: (logits, *extras)
+        - dict: {"logits": ..., ...}
+        - snnTorch-like tuple: (spk[T,B,C], mem...) -> reduces to logits (optional)
     """
 
     def __init__(self, assume_spikes_if_3d: bool = True, spike_reduce: str = "sum"):

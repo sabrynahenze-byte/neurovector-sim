@@ -99,7 +99,7 @@ class SNNConvModel(nn.Module):
 
         return torch.stack(spk3_rec)
 
-def train_save_snn_model():
+def train_save_snn_model(num_epochs=3):
     # Device
     device = torch.device("cpu")
 
@@ -107,7 +107,6 @@ def train_save_snn_model():
     batch_size = 64
     num_steps = 25
     beta = 0.95
-    num_epochs = 2
 
     # MNIST Dataset
     transform = transforms.Compose([
@@ -126,12 +125,13 @@ def train_save_snn_model():
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     
     # Initialize model
-    model = SNNFCModel().to(device)
+    model = SNNFCModel(beta=beta, num_steps=num_steps).to(device)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    # Training 
+    # Training
+    model.train()
     print(f"Starting Training on {device}...")
     for epoch in range(num_epochs):
         for data, targets in train_loader:
@@ -150,6 +150,7 @@ def train_save_snn_model():
         print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
 
     # Testing
+    model.eval()
     correct = 0
     total = 0
 
@@ -168,9 +169,9 @@ def train_save_snn_model():
     accuracy = 100 * correct / total
     print(f"Test Accuracy: {accuracy:.2f}%")
 
-    torch.save(model.state_dict(), 'snntorch_model.pt')
+    torch.save(model.state_dict(), 'snntorch_fc_model.pt')
 
-def train_save_snn_cnn_model():
+def train_save_snn_cnn_model(num_epochs=3):
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -178,9 +179,8 @@ def train_save_snn_cnn_model():
     batch_size = 64
     num_steps = 25
     beta = 0.95
-    num_epochs = 2
 
-    # MNIST Dataset 
+    # MNIST Dataset
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
@@ -247,7 +247,7 @@ def train_save_snn_cnn_model():
     print(f"Test Accuracy: {accuracy:.2f}%")
 
     # Save the weights
-    torch.save(model.state_dict(), 'snntorch_cnn_model.pt')
+    torch.save(model.state_dict(), 'snntorch_conv_model.pt')
     print("Model saved as snntorch_cnn_model.pt")
 
 if __name__ == "__main__":
