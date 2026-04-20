@@ -7,7 +7,7 @@ import snntorch as snn
 from snntorch import surrogate
 from torch.utils.data import DataLoader
 
-# SNN Model (Matches Classical 784 → 128 → 64 → 10)
+
 class SNNFCModel(nn.Module):
     def __init__(self, beta=0.95, num_steps=25):
         super().__init__()
@@ -15,26 +15,18 @@ class SNNFCModel(nn.Module):
         self.beta = beta
         self.num_steps = num_steps
 
-        # Layer 1
-        self.fc1 = nn.Linear(28 * 28, 128)
+        self.fc1 = nn.Linear(28 * 28, 256)
         self.lif1 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid())
 
-        # Layer 2
-        self.fc2 = nn.Linear(128, 64)
+        self.fc2 = nn.Linear(256, 10)
         self.lif2 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid())
 
-        # Output Layer
-        self.fc3 = nn.Linear(64, 10)
-        self.lif3 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid())
-
     def forward(self, x):
-        # Flatten MNIST input for the linear layers
         x = x.view(x.size(0), -1)
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
-        mem3 = self.lif3.init_leaky()
 
-        spk3_rec = []
+        spk2_rec = []
 
         for _ in range(self.num_steps):
             cur1 = self.fc1(x)
@@ -43,35 +35,29 @@ class SNNFCModel(nn.Module):
             cur2 = self.fc2(spk1)
             spk2, mem2 = self.lif2(cur2, mem2)
 
-            cur3 = self.fc3(spk2)
-            spk3, mem3 = self.lif3(cur3, mem3)
+            spk2_rec.append(spk2)
 
-            spk3_rec.append(spk3)
-
-        return torch.stack(spk3_rec)
+        return torch.stack(spk2_rec)
     
 class SNNConvModel(nn.Module):
     def __init__(self, beta=0.95, num_steps=25):
         super().__init__()
         self.num_steps = num_steps
 
-        # Layer 1: Conv -> LIF
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
         self.lif1 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid())
 
-        # Layer 2: Conv -> LIF
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
         self.lif2 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid())
 
         self.pool = nn.MaxPool2d(2)
         self.flat = nn.Flatten()
 
-        # Output Layer: Linear -> LIF (64 channels x (12 x 12 pixels filter) = 9216 features)
+        # 9216 = 64 * 12 * 12
         self.fc1 = nn.Linear(9216, 10)
         self.lif3 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid())
 
     def forward(self, x):
-        # Initial states for LIF neurons
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
         mem3 = self.lif3.init_leaky()
@@ -79,19 +65,15 @@ class SNNConvModel(nn.Module):
         spk3_rec = []
 
         for _ in range(self.num_steps):
-            # Block 1
             cur1 = self.conv1(x)
             spk1, mem1 = self.lif1(cur1, mem1)
 
-            # Block 2
             cur2 = self.conv2(spk1)
             spk2, mem2 = self.lif2(cur2, mem2)
 
-            # Pool and Flatten the spikes
             pooled_spks = self.pool(spk2)
             flat_spks = self.flat(pooled_spks)
 
-            # Output
             cur3 = self.fc1(flat_spks)
             spk3, mem3 = self.lif3(cur3, mem3)
 
@@ -99,18 +81,18 @@ class SNNConvModel(nn.Module):
 
         return torch.stack(spk3_rec)
 
-def train_save_snn_model(num_epochs=3):
+def train_save_snn_model(num_epochs=10):
     # Device
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Hyperparameters
-    batch_size = 64
-    num_steps = 25
+    batch_size = 512
+    num_steps = 15
     beta = 0.95
 
-    # MNIST Dataset
     transform = transforms.Compose([
         transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,)),
     ])
 
     train_dataset = torchvision.datasets.MNIST(
@@ -132,7 +114,7 @@ def train_save_snn_model(num_epochs=3):
 
     # Training
     model.train()
-    print(f"Starting Training on {device}...")
+    print(f"Training SNN FC on {device}...")
     for epoch in range(num_epochs):
         for data, targets in train_loader:
             data = data.view(data.size(0), -1).to(device)
@@ -171,13 +153,13 @@ def train_save_snn_model(num_epochs=3):
 
     torch.save(model.state_dict(), 'snntorch_fc_model.pt')
 
-def train_save_snn_cnn_model(num_epochs=3):
+def train_save_snn_cnn_model(num_epochs=10):
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Hyperparameters
-    batch_size = 64
-    num_steps = 25
+    batch_size = 512
+    num_steps = 15
     beta = 0.95
 
     # MNIST Dataset
@@ -203,7 +185,7 @@ def train_save_snn_cnn_model(num_epochs=3):
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     # Training Loop
-    print(f"Starting Training on {device}...")
+    print(f"Training CSNN on {device}...")
     model.train()
     for epoch in range(num_epochs):
         total_loss = 0
@@ -248,7 +230,7 @@ def train_save_snn_cnn_model(num_epochs=3):
 
     # Save the weights
     torch.save(model.state_dict(), 'snntorch_conv_model.pt')
-    print("Model saved as snntorch_cnn_model.pt")
+    print("Model saved as snntorch_conv_model.pt")
 
 if __name__ == "__main__":
     train_save_snn_model()
