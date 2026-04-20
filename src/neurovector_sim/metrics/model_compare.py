@@ -1,34 +1,21 @@
-############################################################
-# This script provides a unified evaluation pipeline to
-# compare standard PyTorch classifiers (ANNs) against
-# SNNs. Adapters are used to abstract differences in output
-# between ANN and SNN models. That is, whereas the output
-# of ANNs is typically a single tensor of logits, the output
-# of SNNS is a sequence of spikes over time. Models are
-# evaluated on standard performance metrics (Accuracy, Loss,
-# and Expected Calibration Error) as well as hardware-based
-# metrics (SNN only).
-############################################################
+# Unified eval pipeline for ANN vs SNN comparison.
+# Adapters normalize output differences (ANNs return logits,
+# SNNs return spike trains) so all models use the same metrics.
 
-from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Tuple, Any, Protocol
+from typing import Optional, Dict, Any
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from aihwkit.nn import AnalogLinear, AnalogConv2d
 
-# ----------------------------------------
-# SOP Counter for Hardware Efficiency
-# ----------------------------------------
+
 class SOPCounter:
-    """
-    Represents a counter that hooks into model layers to count
-    Synaptic Operations (SOPs) and calculate Activation Sparsity.
-    """
+    """Counts synaptic operations (SOPs) and activation sparsity via forward hooks."""
 
-    def __init__(self, model: nn.Module):
+    def __init__(self, model):
         self.model = model
         self.hooks = []
         self.total_sops = 0
@@ -38,9 +25,9 @@ class SOPCounter:
 
     def _register_hooks(self):
         for layer in self.model.modules():
-            if isinstance(layer, (nn.Linear, nn.Conv2d)):
-                # Fan-out calc (# output connections for each input neuron)
-                if isinstance(layer, nn.Linear):
+            if isinstance(layer, (nn.Linear, nn.Conv2d, AnalogLinear, AnalogConv2d)):
+                # Fan-out = # output connections per input neuron
+                if isinstance(layer, (nn.Linear, AnalogLinear)):
                     fan_out = layer.out_features
                 else:
                     fan_out = (
@@ -54,7 +41,6 @@ class SOPCounter:
                 )
 
     def _count_metrics(self, layer_input, fan_out):
-        # layer_input[0] shape: [B, C] for ANN, [T, B, C] for SNN
         data = layer_input[0]
 
         # Threshold at 0.5 so analog activations don't inflate the spike count
@@ -65,7 +51,7 @@ class SOPCounter:
         self.total_spikes += num_spikes
         self.total_possible_activations += data.numel()
 
-    def get_sparsity(self) -> float:
+    def get_sparsity(self):
         if self.total_possible_activations == 0:
             return 0.0
         return 1.0 - (self.total_spikes / self.total_possible_activations)
@@ -80,185 +66,36 @@ class SOPCounter:
             h.remove()
 
 
-# ----------------------------------------
-# Common outputs & Adapters
-# ----------------------------------------
 @dataclass
 class EvalOutputs:
-    """
-    Simple data structure used to unify outputs for metrics computation.
-    """
-
     logits: torch.Tensor
     loss: Optional[torch.Tensor] = None
-    extras: Optional[Dict[str, Any]] = (
-        None  # Additional properties (e.g. {"spk": [T, B, C], "mem": ...})
-    )
+    extras: Optional[Dict[str, Any]] = None
 
 
-class OutputAdapter(Protocol):
-    """
-    Model-agnostic adapter blueprint.
-    """
-
-    def __call__(
-        self, model_out: Any, targets: torch.Tensor, loss_fn: Optional[Callable]
-    ) -> EvalOutputs: ...
+def adapt_torch(model_out, targets, loss_fn):
+    """For standard PyTorch ANN outputs (just logits)."""
+    loss = loss_fn(model_out, targets) if loss_fn else None
+    return EvalOutputs(logits=model_out, loss=loss)
 
 
-class TorchAdapter:
-    """
-    The default adapter used to convert PyTorch ANN outputs to EvalOutput values.
-    """
-
-    def __call__(
-        self, model_out: Any, targets: torch.Tensor, loss_fn: Optional[Callable]
-    ) -> EvalOutputs:
-        logits = model_out
-        loss = loss_fn(logits, targets) if loss_fn is not None else None
-        return EvalOutputs(logits=logits, loss=loss)
+def adapt_snn(model_out, targets, loss_fn):
+    """For SNN/AIHWKIT outputs. Sums spikes over time to get logits."""
+    spk = model_out
+    logits = spk.sum(dim=0)
+    loss = loss_fn(spk, targets) if loss_fn else None
+    return EvalOutputs(logits=logits, loss=loss, extras={"spk": spk})
 
 
-class SnnTorchAdapter:
-    """
-    The default adapter used to convert snnTorch SNN outputs to EvalOutput values.
-    """
-
-    def __init__(self, reduce: str = "sum"):
-        self.reduce = reduce
-
-    def __call__(
-        self, model_out: Any, targets: torch.Tensor, loss_fn: Optional[Callable]
-    ) -> EvalOutputs:
-        if isinstance(model_out, (tuple, list)):
-            spk = model_out[0]
-            extras = {"spk": spk, "mem": model_out[1] if len(model_out) > 1 else None}
-        else:
-            spk = model_out
-            extras = {"spk": spk}
-
-        if self.reduce == "sum":
-            logits = spk.sum(dim=0)
-        elif self.reduce == "mean":
-            logits = spk.mean(dim=0)
-        else:
-            logits = spk.max(dim=0).values
-
-        loss = loss_fn(spk, targets) if loss_fn is not None else None
-        return EvalOutputs(logits=logits, loss=loss, extras=extras)
-
-
-class AIHWKITAdapter:
-    """
-    An adapter for AIHWKIT-based models.
-
-    Supports the following formats for evaluation:
-        - logits tensor: [B, C]
-        - tuple/list: (logits, *extras)
-        - dict: {"logits": ..., ...}
-        - snnTorch-like tuple: (spk[T,B,C], mem...) -> reduces to logits (optional)
-    """
-
-    def __init__(self, assume_spikes_if_3d: bool = True, spike_reduce: str = "sum"):
-        self.assume_spikes_if_3d = assume_spikes_if_3d
-        if spike_reduce not in {"sum", "mean", "max"}:
-            raise ValueError("spike_reduce must be one of: sum, mean, max")
-        self.spike_reduce = spike_reduce
-
-    def __call__(
-        self, model_out: Any, targets: torch.Tensor, loss_fn: Optional[Callable]
-    ) -> EvalOutputs:
-        extras: Dict[str, Any] = {}
-
-        if isinstance(model_out, dict):
-            if "logits" not in model_out:
-                raise ValueError("AIHWKITAdapter expected dict with key 'logits'.")
-            logits = model_out["logits"]
-            extras = {k: v for k, v in model_out.items() if k != "logits"}
-        elif isinstance(model_out, (tuple, list)):
-            if len(model_out) == 0:
-                raise ValueError("AIHWKITAdapter got empty tuple/list output.")
-            first_out = model_out[0]
-
-            # If first output looks like spikes [T, B, C], then reduce to [B, C]
-            if (
-                self.assume_spikes_if_3d
-                and isinstance(first_out, torch.Tensor)
-                and first_out.dim() == 3
-            ):
-                spk = first_out
-                extras["spk"] = spk
-                if len(model_out) > 1:
-                    extras["mem"] = model_out[1]
-                logits = self._reduce_spikes(spk)
-
-                # For snnTorch losses, spikes are usually expected instead of logits
-                loss = loss_fn(spk, targets) if loss_fn is not None else None
-                return EvalOutputs(logits=logits, loss=loss, extras=extras)
-
-            # Otherwise, assume logits
-            logits = first_out
-            if len(model_out) > 1:
-                extras["raw_out"] = model_out[1:]
-        else:
-            # Plain tensor output
-            logits = model_out
-
-        if not isinstance(logits, torch.Tensor):
-            raise ValueError(f"Expected logits tensor, but got {type(logits)}")
-
-        # 3D logits means the time dimension wasn't reduced upstream, so handle this case
-        if logits.dim() == 3 and self.assume_spikes_if_3d:
-            spk = logits
-            extras["spk"] = spk
-            logits = self._reduce_spikes(spk)
-            loss = loss_fn(spk, targets) if loss_fn is not None else None
-            return EvalOutputs(logits=logits, loss=loss, extras=extras)
-
-        if logits.dim() != 2:
-            raise ValueError(
-                f"Expected logits shape [B, C], but got {tuple(logits.shape)}"
-            )
-
-        loss = loss_fn(logits, targets) if loss_fn is not None else None
-        return EvalOutputs(logits=logits, loss=loss, extras=extras or None)
-
-    def _reduce_spikes(self, spk: torch.Tensor) -> torch.Tensor:
-        if self.spike_reduce == "sum":
-            return spk.sum(dim=0)
-        if self.spike_reduce == "mean":
-            return spk.mean(dim=0)
-        return spk.max(dim=0).values
-
-
-# ----------------------------
-# Metrics
-# ----------------------------
 @torch.no_grad()
-def top1_accuracy(logits: torch.Tensor, targets: torch.Tensor) -> float:
+def top1_accuracy(logits, targets):
     preds = logits.argmax(dim=1)
     return (preds == targets).float().mean().item()
 
 
 @torch.no_grad()
-def expected_calibration_error(
-    logits: torch.Tensor, targets: torch.Tensor, n_bins: int = 15
-) -> float:
-    """
-    Compute top-label Expected Calibration Error (ECE) from logits.
-
-    Top-label ECE from logits [B, C]. Bins predictions by confidence, then
-    sums |conf - acc| weighted by bin fraction. Lower = better calibrated.
-
-    Args:
-        logits: Model outputs of shape [B, C], where B is batch size and C
-            is the number of classes.
-        targets: Ground-truth class indices of shape [B].
-        n_bins: Number of equal-width confidence bins.
-
-    Returns:
-        Scalar ECE value as a Python float (lower is better calibrated).
-    """
+def expected_calibration_error(logits, targets, n_bins=15):
+    """ECE from logits [B, C]. Lower = better calibrated."""
 
     probs = F.softmax(logits, dim=1)
     conf, preds = probs.max(dim=1)
@@ -275,12 +112,8 @@ def expected_calibration_error(
 
 
 @torch.no_grad()
-def snn_energy_latency_from_spikes(spk: torch.Tensor) -> Tuple[float, float]:
-    """
-    Proxy metrics from a spike tensor [T, B, C].
-      - Energy: avg total spikes per sample
-      - Latency: avg time step of first spike per sample (T if no spike fires)
-    """
+def snn_energy_latency_from_spikes(spk):
+    """Energy (avg spikes/sample) and latency (avg first-spike step) from spikes [T, B, C]."""
 
     T, B, C = spk.shape
     energy = spk.sum(dim=(0, 2)).float().mean().item()
@@ -292,9 +125,6 @@ def snn_energy_latency_from_spikes(spk: torch.Tensor) -> Tuple[float, float]:
     return energy, sum(lat) / len(lat)
 
 
-# ----------------------------
-# Evaluator
-# ----------------------------
 @dataclass
 class EvalResult:
     name: str
@@ -305,15 +135,7 @@ class EvalResult:
 
 
 class ModelEvaluator:
-    def __init__(
-        self,
-        model: nn.Module,
-        adapter: OutputAdapter,
-        name: str,
-        loss_fn: Optional[Callable] = None,
-        compute_ece: bool = True,
-        is_snn: bool = False,
-    ):
+    def __init__(self, model, adapter, name, loss_fn=None, compute_ece=True, is_snn=False):
         self.model = model
         self.adapter = adapter
         self.name = name
@@ -323,7 +145,7 @@ class ModelEvaluator:
         self.sop_counter = SOPCounter(model) if is_snn else None
 
     @torch.no_grad()
-    def evaluate(self, loader, device: torch.device) -> EvalResult:
+    def evaluate(self, loader, device):
         self.model.eval()
 
         if self.sop_counter:
@@ -383,7 +205,5 @@ class ModelEvaluator:
         return result
 
 
-def compare_models(
-    evals: Dict[str, ModelEvaluator], loader, device: torch.device
-) -> Dict[str, EvalResult]:
+def compare_models(evals, loader, device):
     return {k: v.evaluate(loader, device) for k, v in evals.items()}
