@@ -1,556 +1,593 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MNIST Digit Classifier</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeuroVector-Sim MNIST Comparison</title>
     <style>
-        /* ALL YOUR EXISTING CSS STYLES HERE */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        padding: 30px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 6px;
+        font-size: 2.2em;
+      }
+      h1 span {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .subtitle {
+        text-align: center;
+        color: #888;
+        margin-bottom: 28px;
+        font-size: 0.95em;
+      }
+
+      .model-selector {
+        margin-bottom: 24px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 10px;
+      }
+      .model-selector h3 {
+        margin-bottom: 12px;
+        color: #333;
+      }
+      .selector-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .selector-controls button {
+        padding: 5px 14px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background: white;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .selector-controls button:hover {
+        background: #eef;
+      }
+      .family-groups {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+      }
+      .family-group {
+        background: white;
+        border-radius: 8px;
+        padding: 12px 14px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
+      .family-group h4 {
+        font-size: 13px;
+        color: #667eea;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .family-group label {
+        display: block;
+        padding: 4px 0;
+        cursor: pointer;
+        font-size: 14px;
+        color: #444;
+      }
+      .family-group input[type="checkbox"] {
+        margin-right: 6px;
+      }
+      .model-unavailable {
+        color: #bbb;
+        text-decoration: line-through;
+      }
+
+      .upload-section {
+        text-align: center;
+        padding: 36px;
+        border: 3px dashed #ccc;
+        border-radius: 10px;
+        margin-bottom: 24px;
+        transition: border-color 0.3s;
+        cursor: pointer;
+      }
+      .upload-section:hover,
+      .upload-section.dragover {
+        border-color: #667eea;
+      }
+      .upload-section.dragover {
+        background: #f0f3ff;
+      }
+      .upload-icon {
+        font-size: 48px;
+        color: #667eea;
+      }
+      .upload-text {
+        font-size: 18px;
+        color: #666;
+        margin: 8px 0 4px;
+      }
+      .upload-hint {
+        font-size: 14px;
+        color: #999;
+      }
+      #fileInput {
+        display: none;
+      }
+
+      .preview-section {
+        display: none;
+        text-align: center;
+        margin-bottom: 24px;
+      }
+      .preview-image {
+        max-width: 180px;
+        max-height: 180px;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        margin-bottom: 14px;
+      }
+      .btn-row {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+      }
+      .predict-btn,
+      .reset-btn {
+        border: none;
+        padding: 11px 34px;
+        font-size: 16px;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: bold;
+        transition:
+          transform 0.15s,
+          box-shadow 0.15s;
+      }
+      .predict-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+      .predict-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+      }
+      .predict-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .reset-btn {
+        background: #eee;
+        color: #555;
+      }
+      .reset-btn:hover {
+        background: #ddd;
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        margin: 20px 0;
+      }
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 10px;
+      }
+      @keyframes spin {
+        100% {
+          transform: rotate(360deg);
         }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 30px;
-            font-size: 2.5em;
-        }
-        
-        h1 span {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .upload-section {
-            text-align: center;
-            padding: 40px;
-            border: 3px dashed #ccc;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            transition: border-color 0.3s;
-            cursor: pointer;
-        }
-        
-        .upload-section:hover {
-            border-color: #667eea;
-        }
-        
-        .upload-section.dragover {
-            border-color: #667eea;
-            background: #f0f3ff;
-        }
-        
-        .upload-icon {
-            font-size: 48px;
-            margin-bottom: 10px;
-            color: #667eea;
-        }
-        
-        .upload-text {
-            font-size: 18px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-        
-        .upload-hint {
-            font-size: 14px;
-            color: #999;
-        }
-        
-        #fileInput {
-            display: none;
-        }
-        
-        .preview-section {
-            display: none;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .preview-image {
-            max-width: 200px;
-            max-height: 200px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            margin-bottom: 15px;
-        }
-        
-        .predict-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 40px;
-            font-size: 18px;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            font-weight: bold;
-        }
-        
-        .predict-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .predict-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .results-section {
-            display: none;
-            margin-top: 30px;
-        }
-        
-        .prediction-badge {
-            text-align: center;
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-        
-        .prediction-number {
-            font-size: 72px;
-            font-weight: bold;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            line-height: 1;
-        }
-        
-        .confidence {
-            font-size: 18px;
-            color: #666;
-        }
-        
-        .results-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-top: 20px;
-        }
-        
-        .plot-container {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-        }
-        
-        .plot-container img {
-            max-width: 100%;
-            border-radius: 5px;
-        }
-        
-        .top3-container {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-        }
-        
-        .top3-title {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            color: #333;
-        }
-        
-        .top3-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: white;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        
-        .top3-digit {
-            font-size: 24px;
-            font-weight: bold;
-            width: 50px;
-            color: #667eea;
-        }
-        
-        .top3-prob {
-            flex: 1;
-            margin: 0 15px;
-        }
-        
-        .prob-bar {
-            height: 20px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-            transition: width 0.5s;
-        }
-        
-        .top3-percent {
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .error-message {
-            color: #dc3545;
-            text-align: center;
-            padding: 10px;
-            border-radius: 5px;
-            background: #f8d7da;
-            margin-top: 20px;
-            display: none;
-        }
-        
-        .all-probs {
-            margin-top: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-        }
-        
-        .prob-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        .prob-cell {
-            text-align: center;
-            padding: 5px;
-            background: white;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        
-        .prob-digit {
-            font-weight: bold;
-            color: #667eea;
-        }
-        
-        .prob-value {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        footer {
-            text-align: center;
-            margin-top: 30px;
-            color: #999;
-        }
+      }
+      .error-message {
+        color: #dc3545;
+        text-align: center;
+        padding: 10px;
+        border-radius: 5px;
+        background: #f8d7da;
+        margin-top: 16px;
+        display: none;
+      }
+
+      .results-section {
+        display: none;
+        margin-top: 28px;
+      }
+      .results-section h2 {
+        text-align: center;
+        margin-bottom: 16px;
+        color: #333;
+      }
+
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 24px;
+      }
+      .comparison-table th,
+      .comparison-table td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+      .comparison-table th {
+        background: #f8f9fa;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        color: #666;
+      }
+      .comparison-table td {
+        font-size: 14px;
+      }
+      .comparison-table tr:hover {
+        background: #fafbff;
+      }
+      .pred-badge {
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+        line-height: 32px;
+        text-align: center;
+        border-radius: 50%;
+        font-weight: bold;
+        color: white;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+      }
+      .prob-mini-bar {
+        display: inline-block;
+        height: 8px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        vertical-align: middle;
+        margin-right: 6px;
+      }
+
+      .plot-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+      }
+      .plot-section + .plot-section {
+        margin-top: 16px;
+      }
+      .plot-section img {
+        max-width: 100%;
+        border-radius: 5px;
+      }
+      .plot-family {
+        font-size: 13px;
+        color: #667eea;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+        text-align: left;
+      }
+
+      footer {
+        text-align: center;
+        margin-top: 28px;
+        color: #999;
+        font-size: 13px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1><span>MNIST</span> Digit Classifier</h1>
-        
-        <div class="upload-section" id="uploadSection">
-            <div class="upload-text">Drag & drop or click to upload</div>
-            <div class="upload-hint">Supports: JPG, PNG, GIF</div>
-            <input type="file" id="fileInput" accept="image/*">
+      <h1><span>NeuroVector-Sim</span> MNIST Comparison</h1>
+      <p class="subtitle">ANN vs SNN vs AIHWKIT Digital vs AIHWKIT Analog</p>
+
+      <div class="model-selector">
+        <h3>Select Models</h3>
+        <div class="selector-controls">
+          <button onclick="selectAll()">Select All</button>
+          <button onclick="selectNone()">Clear</button>
+          <button onclick="selectFamilies(['ANN'])">ANN Only</button>
+          <button
+            onclick="
+              selectFamilies(['SNN', 'AIHWKIT Analog', 'AIHWKIT Digital'])
+            "
+          >
+            SNN Only
+          </button>
+          <button onclick="selectFamilies(['AIHWKIT Digital'])">
+            Digitally trained analog only
+          </button>
+          <button onclick="selectFamilies(['AIHWKIT Analog'])">
+            End-to-end analog only
+          </button>
         </div>
-        
-        <div class="preview-section" id="previewSection">
-            <img src="" alt="Preview" class="preview-image" id="previewImage">
-            <button class="predict-btn" id="predictBtn">Predict Digit</button>
+        <div class="family-groups" id="familyGroups"></div>
+      </div>
+
+      <div class="upload-section" id="uploadSection">
+        <div class="upload-icon">&#128228;</div>
+        <div class="upload-text">
+          Drag &amp; drop or click to upload a digit image
         </div>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Analyzing your image...</p>
+        <div class="upload-hint">Supports JPG, PNG, GIF</div>
+        <input type="file" id="fileInput" accept="image/*" />
+      </div>
+
+      <div class="preview-section" id="previewSection">
+        <img
+          src=""
+          alt="Preview"
+          class="preview-image"
+          id="previewImage"
+        /><br />
+        <div class="btn-row">
+          <button class="predict-btn" id="predictBtn">Compare Models</button>
+          <button class="reset-btn" id="resetBtn">Clear</button>
         </div>
-        
-        <div class="error-message" id="errorMessage"></div>
-        
-        <div class="results-section" id="resultsSection">
-            <div class="prediction-badge">
-                <div class="prediction-number" id="predictionNumber">?</div>
-                <div class="confidence" id="confidenceText"></div>
-            </div>
-            
-            <div class="results-grid">
-                <div class="plot-container">
-                    <img src="" alt="Prediction Visualization" id="resultPlot">
-                </div>
-                
-                <div class="top3-container">
-                    <div class="top3-title">Top 3 Predictions</div>
-                    <div id="top3List"></div>
-                </div>
-            </div>
-            
-            <div class="all-probs">
-                <div class="top3-title">All Class Probabilities</div>
-                <div class="prob-grid" id="probGrid"></div>
-            </div>
-        </div>
-        
-        <footer>
-            Powered by PyTorch & Flask | Trained on MNIST dataset
-        </footer>
+      </div>
+
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Running inference across selected models...</p>
+      </div>
+      <div class="error-message" id="errorMessage"></div>
+
+      <div class="results-section" id="resultsSection">
+        <h2>Results</h2>
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Family</th>
+              <th>Variant</th>
+              <th>Prediction</th>
+              <th>Confidence</th>
+              <th>Top Probabilities</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+        <div id="plotsContainer"></div>
+      </div>
+
+      <footer>
+        Powered by PyTorch, snnTorch &amp; AIHWKIT | Trained on MNIST
+      </footer>
     </div>
 
     <script>
-    console.log('JavaScript loaded successfully!');
-    
-    // Get DOM elements
-    const uploadSection = document.getElementById('uploadSection');
-    const fileInput = document.getElementById('fileInput');
-    const previewSection = document.getElementById('previewSection');
-    const previewImage = document.getElementById('previewImage');
-    const predictBtn = document.getElementById('predictBtn');
-    const loading = document.getElementById('loading');
-    const resultsSection = document.getElementById('resultsSection');
-    const errorMessage = document.getElementById('errorMessage');
-    const predictionNumber = document.getElementById('predictionNumber');
-    const confidenceText = document.getElementById('confidenceText');
-    const resultPlot = document.getElementById('resultPlot');
-    const top3List = document.getElementById('top3List');
-    const probGrid = document.getElementById('probGrid');
+      let currentFile = null;
 
-    // Variable to track the current file
-    let currentFile = null;
+      fetch("/models")
+        .then((r) => r.json())
+        .then(renderModelSelector)
+        .catch((err) => console.error("Failed to fetch model list:", err));
 
-    // Check if all elements were found
-    console.log('DOM Elements found:', {
-        uploadSection: !!uploadSection,
-        fileInput: !!fileInput,
-        previewSection: !!previewSection,
-        previewImage: !!previewImage,
-        predictBtn: !!predictBtn,
-        loading: !!loading,
-        resultsSection: !!resultsSection,
-        errorMessage: !!errorMessage
-    });
+      function renderModelSelector(models) {
+        const container = document.getElementById("familyGroups");
+        container.innerHTML = "";
 
-    // Handle drag & drop
-    uploadSection.addEventListener('click', () => {
-        console.log('Upload section clicked');
-        fileInput.click();
-    });
-    
-    uploadSection.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadSection.classList.add('dragover');
-    });
-    
-    uploadSection.addEventListener('dragleave', () => {
-        uploadSection.classList.remove('dragover');
-    });
-    
-    uploadSection.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadSection.classList.remove('dragover');
-        const file = e.dataTransfer.files[0];
-        console.log('File dropped:', file ? file.name : 'No file');
-        if (file && file.type.startsWith('image/')) {
-            currentFile = file;  // Store the file
-            handleFile(file);
-        } else {
-            console.error('Not an image file');
-            showError('Please upload an image file');
-        }
-    });
-    
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        console.log('File selected:', file ? file.name : 'No file');
-        if (file) {
-            currentFile = file;  // Store the file
-            handleFile(file);
-        }
-    });
-    
-    function handleFile(file) {
-        console.log('Handling file:', file.name);
-        console.log('File details:', {
-            name: file.name,
-            type: file.type,
-            size: file.size + ' bytes'
+        const families = {};
+        models.forEach((m) => {
+          if (!families[m.family]) families[m.family] = [];
+          families[m.family].push(m);
         });
-        
+
+        for (const [family, members] of Object.entries(families)) {
+          const group = document.createElement("div");
+          group.className = "family-group";
+          group.innerHTML = `<h4>${family}</h4>`;
+
+          members.forEach((m) => {
+            const label = document.createElement("label");
+            const unavailable = !m.loaded;
+            label.className = unavailable ? "model-unavailable" : "";
+            label.innerHTML = `
+                <input type="checkbox"
+                       class="model-cb"
+                       value="${m.id}"
+                       data-family="${m.family}"
+                       ${unavailable ? "disabled" : "checked"}>
+                ${m.label} ${unavailable ? "(no weights)" : ""}
+            `;
+            group.appendChild(label);
+          });
+          container.appendChild(group);
+        }
+      }
+
+      function getSelectedModels() {
+        return Array.from(document.querySelectorAll(".model-cb:checked")).map(
+          (cb) => cb.value,
+        );
+      }
+      function selectAll() {
+        document
+          .querySelectorAll(".model-cb:not(:disabled)")
+          .forEach((cb) => (cb.checked = true));
+      }
+      function selectNone() {
+        document
+          .querySelectorAll(".model-cb")
+          .forEach((cb) => (cb.checked = false));
+      }
+      function selectFamilies(families) {
+        const set = new Set(families);
+        document.querySelectorAll(".model-cb").forEach((cb) => {
+          if (!cb.disabled) cb.checked = set.has(cb.dataset.family);
+        });
+      }
+
+      const uploadSection = document.getElementById("uploadSection");
+      const fileInput = document.getElementById("fileInput");
+      const previewSection = document.getElementById("previewSection");
+      const previewImage = document.getElementById("previewImage");
+      const predictBtn = document.getElementById("predictBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const loading = document.getElementById("loading");
+      const resultsSection = document.getElementById("resultsSection");
+      const errorMessage = document.getElementById("errorMessage");
+
+      uploadSection.addEventListener("click", () => fileInput.click());
+
+      uploadSection.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadSection.classList.add("dragover");
+      });
+      uploadSection.addEventListener("dragleave", () => {
+        uploadSection.classList.remove("dragover");
+      });
+      uploadSection.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadSection.classList.remove("dragover");
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith("image/")) {
+          currentFile = file;
+          showPreview(file);
+        } else {
+          showError("Please upload an image file.");
+        }
+      });
+
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          currentFile = file;
+          showPreview(file);
+        }
+      });
+
+      function showPreview(file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            console.log('File loaded into memory');
-            previewImage.src = e.target.result;
-            previewSection.style.display = 'block';
-            resultsSection.style.display = 'none';
-            errorMessage.style.display = 'none';
-            console.log('Preview displayed');
-            
-            // Verify file is still accessible
-            console.log('Current file after load:', currentFile ? currentFile.name : 'None');
-        };
-        reader.onerror = (e) => {
-            console.error('FileReader error:', e);
+          previewImage.src = e.target.result;
+          previewSection.style.display = "block";
+          resultsSection.style.display = "none";
+          errorMessage.style.display = "none";
         };
         reader.readAsDataURL(file);
-    }
-    
-    predictBtn.addEventListener('click', async () => {
-        console.log('Predict button clicked');
-        
-        // Use currentFile instead of fileInput.files[0]
-        console.log('Current file:', currentFile ? currentFile.name : 'No file');
-        
-        if (!currentFile) {
-            console.error('No file selected (currentFile is null)');
-            showError('Please select an image first');
-            return;
-        }
-        
-        // Show loading
-        console.log('Showing loading spinner');
-        loading.style.display = 'block';
-        predictBtn.disabled = true;
-        errorMessage.style.display = 'none';
-        
-        const formData = new FormData();
-        formData.append('file', currentFile);
-        
-        // Log FormData contents (for debugging)
-        console.log('FormData entries:');
-        for (let pair of formData.entries()) {
-            console.log('   ', pair[0], ':', pair[1] instanceof File ? pair[1].name : pair[1]);
-        }
-        
-        try {
-            console.log('Sending request to /predict...');
-            console.log('Using URL:', window.location.origin + '/predict');
-            
-            const response = await fetch('/predict', {
-                method: 'POST',
-                body: formData
-            });
-            
-            console.log('Response received:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok
-            });
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Error response:', errorText);
-                throw new Error(`Server error: ${response.status} - ${errorText}`);
-            }
-            
-            const result = await response.json();
-            console.log('Response data:', result);
-            
-            if (result.success) {
-                console.log('Prediction successful!');
-                // Update results
-                predictionNumber.textContent = result.prediction;
-                confidenceText.textContent = `Confidence: ${result.confidence}`;
-                resultPlot.src = 'data:image/png;base64,' + result.plot;
-                
-                // Update top 3
-                top3List.innerHTML = '';
-                result.top3.forEach((item, index) => {
-                    const probValue = parseFloat(item.probability) / 100;
-                    const width = probValue * 100;
-                    
-                    const div = document.createElement('div');
-                    div.className = 'top3-item';
-                    div.innerHTML = `
-                        <span class="top3-digit">#${index + 1}: ${item.digit}</span>
-                        <div class="top3-prob">
-                            <div class="prob-bar" style="width: ${width}%"></div>
-                        </div>
-                        <span class="top3-percent">${item.probability}</span>
-                    `;
-                    top3List.appendChild(div);
-                });
-                
-                // Update probability grid
-                probGrid.innerHTML = '';
-                for (let i = 0; i < 10; i++) {
-                    const prob = result.probabilities[i];
-                    const div = document.createElement('div');
-                    div.className = 'prob-cell';
-                    div.innerHTML = `
-                        <div class="prob-digit">${i}</div>
-                        <div class="prob-value">${prob}</div>
-                    `;
-                    probGrid.appendChild(div);
-                }
-                
-                // Show results
-                resultsSection.style.display = 'block';
-            } else {
-                console.error('Prediction failed:', result.error);
-                showError(result.error || 'Prediction failed');
-            }
-        } catch (error) {
-            console.error('Network error:', error);
-            console.error('Error details:', error.message);
-            showError('Network error: ' + error.message);
-        } finally {
-            console.log('Hiding loading spinner');
-            loading.style.display = 'none';
-            predictBtn.disabled = false;
-        }
-    });
-    
-    function showError(message) {
-        console.error('Showing error:', message);
-        errorMessage.textContent = message;
-        errorMessage.style.display = 'block';
-    }
+      }
 
-    // Add reset button or clear option
-    function resetUpload() {
+      resetBtn.addEventListener("click", () => {
         currentFile = null;
-        fileInput.value = '';  // Clear file input
-        previewSection.style.display = 'none';
-        resultsSection.style.display = 'none';
-        errorMessage.style.display = 'none';
-        console.log('Upload reset');
-    }
+        fileInput.value = "";
+        previewSection.style.display = "none";
+        resultsSection.style.display = "none";
+        errorMessage.style.display = "none";
+      });
 
-    // Optional: Add a way to reset (you could add a button for this)
-    window.onload = function() {
-        console.log('Window fully loaded');
-        console.log('Initial currentFile:', currentFile);
-    };
-</script>
-</body>
+      predictBtn.addEventListener("click", async () => {
+        if (!currentFile) {
+          showError("Upload an image first.");
+          return;
+        }
+
+        const selected = getSelectedModels();
+        if (selected.length === 0) {
+          showError("Pick at least one model.");
+          return;
+        }
+
+        loading.style.display = "block";
+        predictBtn.disabled = true;
+        errorMessage.style.display = "none";
+        resultsSection.style.display = "none";
+
+        const formData = new FormData();
+        formData.append("file", currentFile);
+        formData.append("models", selected.join(","));
+
+        try {
+          const resp = await fetch("/predict", {
+            method: "POST",
+            body: formData,
+          });
+          if (!resp.ok) {
+            const text = await resp.text();
+            throw new Error(`Server ${resp.status}: ${text}`);
+          }
+          const data = await resp.json();
+          if (!data.success) throw new Error(data.error || "Prediction failed");
+          renderResults(data);
+        } catch (err) {
+          showError(err.message);
+        } finally {
+          loading.style.display = "none";
+          predictBtn.disabled = false;
+        }
+      });
+
+      function showError(msg) {
+        errorMessage.textContent = msg;
+        errorMessage.style.display = "block";
+      }
+
+      function renderResults(data) {
+        const tbody = document.getElementById("resultsBody");
+        tbody.innerHTML = "";
+
+        data.results.forEach((r) => {
+          const top3 = Object.entries(r.probabilities)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3);
+          const top3Html = top3
+            .map(([digit, prob]) => {
+              const pct = (prob * 100).toFixed(1);
+              const barW = Math.max(2, prob * 120);
+              return `<span class="prob-mini-bar" style="width:${barW}px"></span>${digit}: ${pct}%`;
+            })
+            .join("<br>");
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><strong>${r.label}</strong></td>
+            <td>${r.family}</td>
+            <td>${r.variant}</td>
+            <td><span class="pred-badge">${r.prediction}</span></td>
+            <td>${r.confidence}</td>
+            <td>${top3Html}</td>
+        `;
+          tbody.appendChild(tr);
+        });
+
+        const plotsContainer = document.getElementById("plotsContainer");
+        plotsContainer.innerHTML = "";
+        data.plots.forEach((p) => {
+          const section = document.createElement("div");
+          section.className = "plot-section";
+          section.innerHTML = `
+            <h4 class="plot-family">${p.family}</h4>
+            <img src="data:image/png;base64,${p.image}" alt="${p.family} probabilities">
+        `;
+          plotsContainer.appendChild(section);
+        });
+
+        resultsSection.style.display = "block";
+      }
+    </script>
+  </body>
 </html>
